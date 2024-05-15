@@ -212,6 +212,9 @@ class SensorAssignment:
                         )
                         robot_curr.append(self.robots_comb[i][k])
                 # print(len(rPos))
+                
+                # call the EKF function for this action-robot combination
+                # if there are 3 robots and 3 actions, there will be 27 (9 action-combinations * 3 robots ) EKF calls
                 (
                     quality_ts,
                     trace_ts,
@@ -235,9 +238,9 @@ class SensorAssignment:
                 # i is the current robot, j is the current action
                 if self.scene == 1:
                     self.robots[i].update_cov(trace_sig_diff, j)
-                self.cov_matrix[i][j] = trace_sig_diff
-                self.sig_matrix[i][j] = tSigma_hat_kp1
-                self.target_est[i][j] = tPos_hat_kp1
+                self.cov_matrix[i][j] = trace_sig_diff # covariance matrix
+                self.sig_matrix[i][j] = tSigma_hat_kp1 # sigma matrix
+                self.target_est[i][j] = tPos_hat_kp1 # target estimate
 
         # print(self.action_num)
         # print(len(action_comb))
@@ -247,11 +250,12 @@ class SensorAssignment:
         # combination of all the actions
         if self.scene == 1:
             action_num = self.action_num
+            # all the possible action combinations(idk why its different from the above one)
             self.action_combs = np.array(
                 tuple(product(range(action_num), repeat=self.Nt))
             )
             # print(self.action_num)
-            # combination of all the sensor and target pair
+            # combination of all the robot and target pairs
             self.sensor_target = np.array(
                 tuple(permutations(range(len(self.robots_comb)), r=self.Nt))
             )

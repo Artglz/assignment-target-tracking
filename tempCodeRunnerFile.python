@@ -1,0 +1,4 @@
+import numpy as np
+
+record = np.zeros((9, 2))
+print(record.shape)
