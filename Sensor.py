@@ -8,7 +8,6 @@ import matplotlib.pyplot as plt
 import matplotlib
 import csv
 from Robot import Robot
-from Target import Target
 
 matplotlib.rcParams['pdf.fonttype'] = 42
 
@@ -75,6 +74,7 @@ class SensorAssignment:
         self.r_sen = (
                 sz * 100
         )  # assume the sensing range is far larger than the size of the world
+        from Target import Target
         self.targets = [Target(sz, i, perb) for i in range(self.Nt)]
         self.targets_greedy = self.targets.copy()
 
@@ -115,6 +115,8 @@ class SensorAssignment:
         self.sig_matrix = None
         self.target_est = None
 
+    #this method is calculating and storing 
+    #important information about a set of targets, including their true positions, estimated positions, and sigma values.
     def targetVals(self):
         self.target_true_pos = np.array(
             [self.targets[i].ground_truth for i in range(self.Nt)]
@@ -126,6 +128,7 @@ class SensorAssignment:
             [[self.targets[i].sigma] for i in range(self.Nt)]
         ).reshape((2 * self.Nt, 2))
 
+    # get the estimated position of all the robots and stores it in a numpy array
     def robotVals(self):
         self.robot_pos = np.array([self.robots[i].location for i in range(self.Nr)])
 
@@ -136,12 +139,12 @@ class SensorAssignment:
 
         self.v = v
         self.w = w
-        self.actions = np.array([[ii, jj] for ii in self.v for jj in self.w])
-        self.action_num = len(self.v) * len(self.w)
+        self.actions = np.array([[ii, jj] for ii in self.v for jj in self.w]) # get all the combinations of actions
+        self.action_num = len(self.v) * len(self.w) # get the number of possible actions
         for i in range(self.Nr):
-            self.robots[i].set_steps(self.action_num, self.Nt)
+            self.robots[i].set_steps(self.action_num, self.Nt) # make a cov_list for each robot
 
-    def all_pairs(self, lst):
+    def all_pairs(self, lst):# only used in scene 2
         """
         Credit to shang from StackOverflow
         https://stackoverflow.com/questions/5360220/how-to-split-a-list-into-pairs-in-all-possible-ways
@@ -176,6 +179,7 @@ class SensorAssignment:
         else:
             action_comb = self.actions
         self.action_for_each_robot = action_comb
+        # storing the covariance matrix, sigma matrix, and target estimates, respectively, for each robot-action combination.
         self.cov_matrix = np.zeros((len(self.robots_comb), len(action_comb), self.Nt))
         self.sig_matrix = np.zeros(
             (len(self.robots_comb), len(action_comb), 2 * self.Nt, 2)
@@ -183,13 +187,14 @@ class SensorAssignment:
         self.target_est = np.zeros(
             (len(self.robots_comb), len(action_comb), self.Nt, 2)
         )
-
-        tPos_hat = self.target_pos_hat
-        tSigma_hat = self.target_pos_sig
-        tPos_true = self.target_true_pos
-
-        for i in range(len(self.robots_comb)):
-
+        # obtained from targetVals()
+        tPos_hat = self.target_pos_hat # estimated target position
+        tSigma_hat = self.target_pos_sig # estimated target covariance
+        tPos_true = self.target_true_pos # true target position
+        
+        # loop through all the robots
+        for i in range(len(self.robots)):
+            # loop through all the actions combinations for each robot
             for j in range(len(action_comb)):
                 u = action_comb[j]
                 # print(u)
@@ -225,6 +230,9 @@ class SensorAssignment:
                 # print(f'robot {[self.robots_comb[i][0].type, self.robots_comb[i][1].type]} and action {u}, pos {rPos} with trace {trace_sig_diff}')
                 # print(f"action {u}, pos {rPos} with trace {trace_sig_diff}")
                 # print(trace_sig_diff)
+
+                # updates the covariance matrix, sigma matrix, and target estimate for the current robot-action combination.
+                # i is the current robot, j is the current action
                 if self.scene == 1:
                     self.robots[i].update_cov(trace_sig_diff, j)
                 self.cov_matrix[i][j] = trace_sig_diff
@@ -1022,6 +1030,7 @@ def target_moving(Nt, Nr, sz, scene, v, w, steps):
             # get the covariance plot
             confidence_ellipse(target_sig, target_est, colors[target_ind])
             robot_pair = test.robots_comb[robot[target_ind]]
+            robot_pair = [robot_pair]
             error_round += find_error(target_loc, target_est)
 
             for robot_ind in range(len(robot_pair)):
@@ -1029,7 +1038,7 @@ def target_moving(Nt, Nr, sz, scene, v, w, steps):
                 robot_pos = robot_curr.location
                 robot_curr.pos_hist[step] = robot_pos
                 robot_hist[robot_curr.id, step, :] = robot_pos[0:2]
-                action_taken = test.action_for_each_robot[action[target_ind]][robot_ind]
+                action_taken = test.action_for_each_robot[action[target_ind]]
                 plt.plot(
                     robot_curr.pos_hist[0: step + 1, 0],
                     robot_curr.pos_hist[0: step + 1, 1],
@@ -1253,7 +1262,7 @@ def cov_error_plot(num):
 
 
 def main():
-    Nt = 4
+    Nt = 3
     Nr = Nt  # for bearing and range sensor
     sz = 10
     scene = 1
@@ -1272,7 +1281,7 @@ def main():
     # test.set_actions(v, w)
     # test.step()
 
-    # target_moving(Nt, Nr, sz, scene, v, w, steps)
+    target_moving(Nt, Nr, sz, scene, v, w, steps)
     # ten_runs(Nt, Nr, sz, scene, v, w, 30, if_OPT=False, if_plot=False)
     # plot_result("ten_run_result8_scene_2.csv")
     # single_run(Nt, Nr, sz, scene, v, w)
