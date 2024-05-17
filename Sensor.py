@@ -237,7 +237,7 @@ class SensorAssignment:
                 # updates the covariance matrix, sigma matrix, and target estimate for the current robot-action combination.
                 # i is the current robot, j is the current action
                 if self.scene == 1:
-                    self.robots[i].update_cov(trace_sig_diff, j)
+                    self.robots[i].update_cov(trace_sig_diff, j) # update the covariance matrix for the current robot-action combination at index j
                 self.cov_matrix[i][j] = trace_sig_diff # covariance matrix
                 self.sig_matrix[i][j] = tSigma_hat_kp1 # sigma matrix
                 self.target_est[i][j] = tPos_hat_kp1 # target estimate
@@ -255,7 +255,7 @@ class SensorAssignment:
                 tuple(product(range(action_num), repeat=self.Nt))
             )
             # print(self.action_num)
-            # combination of all the robot and target pairs
+            # combination of all the robot(sensor) and target pairs
             self.sensor_target = np.array(
                 tuple(permutations(range(len(self.robots_comb)), r=self.Nt))
             )
@@ -295,10 +295,12 @@ class SensorAssignment:
             # print(all_st_pair_reshape.shape)
 
         # initialize the tracker of sum of trace
+        # basically make a matrix of zeros with the size of the action combinations and sensor-target pairs
         self.record = np.zeros((len(self.action_combs), len(self.sensor_target)))
         # print(all_pair)
         # print(all_pair)
 
+        # [v1w1, v1w2, v1w3, v2w1, v2w2, v2w3, v3w1, v3w2, v3w3]
         for ii in range(len(self.action_combs)):
             action_comb = self.action_combs[ii]
             # [robo1_action1, robo2_action1, robo3_action1]...
@@ -308,9 +310,8 @@ class SensorAssignment:
                 for rr in range(self.Nt):
                     robots_ids = self.robots_list[rr]
                     if self.scene == 1:
-                        self.record[ii][jj] += self.robots_comb[rr].get_cov()[
-                            action_comb[rr]
-                        ][pair[rr]]
+                        # calling the get_cov method on the robot combination at index rr, and indexing into the result with action_comb[rr] and pair[rr]
+                        self.record[ii][jj] += self.robots_comb[rr].get_cov()[action_comb[rr]][pair[rr]]
                     else:
                         robot_loc = np.where(
                             np.all(self.robots_list == pair[rr], axis=1)
@@ -329,9 +330,9 @@ class SensorAssignment:
                         ][rr]
                         # for kk in range(len())
                         # print(f'Action: {self.action_combs[ii]}, ST pair: {self.sensor_target[jj]}, robot: {self.robots_comb[rr]}')
-
-        max_val = np.amax(self.record)
-        max_loc = np.where(self.record == max_val)
+        
+        max_val = np.amax(self.record) # get the maximum value in the record matrix
+        max_loc = np.where(self.record == max_val) # get the location of the maximum value
         action_ind = max_loc[0][0]
         pair_ind = max_loc[1][0]
         # print(f"max value: {max_val:0.3f}")
@@ -345,16 +346,19 @@ class SensorAssignment:
 
     def Greedy(self):
         if self.scene == 1:
+            # copy all the list of targets idk why, maybe to not deal with ownership issues
             targets_greedy = self.targets.copy()
             target_poped = []
+            # copy all the list of robots idk why, maybe to not deal with ownership issues
             robots_greedy = self.robots.copy()
-            robot_action_target = np.zeros((len(robots_greedy), 2), dtype=int)
+            # this is the matrix that will store the robot, action, and target, bascically the most important part
+            robot_action_target = np.zeros((len(robots_greedy), 2), dtype=int) 
             robot = []
-            while bool(robots_greedy):
-                if bool(targets_greedy):
+            while bool(robots_greedy): # while there are still robots
+                if bool(targets_greedy): # if there are still targets
                     record_list = np.zeros(
                         (len(robots_greedy), self.action_num, len(targets_greedy))
-                    )
+                    ) # making a matrix of zeros with the size of the robots, actions, and targets to store the trace/covariance
 
                     # assemble all the trace for all the robot, action, for all targets
                     for ii in range(len(robots_greedy)):
@@ -368,20 +372,21 @@ class SensorAssignment:
                     max_loc = np.where(record_list == max_val)
 
                     # keep record of the action and target assigned to the robot
-                    robot_pop = robots_greedy[max_loc[0][0]].id
-                    max_action = max_loc[1][0]
-                    target_pop = targets_greedy[max_loc[2][0]].id
-                    target_poped.append(target_pop)
-                    robot_action_target[robot_pop][0] = max_action
-                    robot_action_target[robot_pop][1] = target_pop
-                    robot.append(robot_pop)
+                    robot_pop = robots_greedy[max_loc[0][0]].id # get the robot id that has the max value
+                    max_action = max_loc[1][0] # get the action that has the max value
+                    target_pop = targets_greedy[max_loc[2][0]].id # get the target id that has the max value
+                    target_poped.append(target_pop) # append the target id to the target_poped list
+                    robot_action_target[robot_pop][0] = max_action # assign the action to the robot
+                    robot_action_target[robot_pop][1] = target_pop # assign the target to the robot
+                    robot.append(robot_pop) # append the robot id to the robot list
                     # pop the robot and target selected in this round
+                    # so they cant be chosen again
                     targets_greedy.pop(max_loc[2][0])
                     robots_greedy.pop(max_loc[0][0])
                     # print(f'robot {robot_pop} with action {max_action} assigned to target {target_pop}')
 
-            actions = robot_action_target[:, 0]
-            pairs = robot_action_target[:, 1]
+            actions = robot_action_target[:, 0] # get all the actions
+            pairs = robot_action_target[:, 1] # get all the targets
             max_cov = sum(
                 [
                     self.robots[ii].get_cov()[robot_action_target[ii][0]][
@@ -389,7 +394,9 @@ class SensorAssignment:
                     ]
                     for ii in range(self.Nr)
                 ]
-            )
+            ) # retrieves the covariance value from the corresponding 
+            # robot's covariance matrix using the action and target indices stored in robot_action_target
+            # the goal is to reduce the covariance, so the lower the better
 
         else:
             targets_greedy = self.targets.copy()
@@ -999,14 +1006,14 @@ def target_moving(Nt, Nr, sz, scene, v, w, steps):
         test.robots[i].pos_hist = np.zeros((steps, 3))
 
     # setup the target trajectory
-    for step in range(len(times)):
+    for step in range(1): # since the steps is 20, will run 20 times
         t = times[step]
 
         # perform a step of tracking evaluation
-        test.step()
+        test.step() # the main point of this function is to update the covariance matrix
 
         # use the pair with the best quality
-        cov, robot, action = test.Greedy()
+        cov, robot, action = test.Greedy() # after the step function, we can use the greedy method to get the best pair since the covariance matrix is updated
 
         plt.figure(step)
         plt.title(f"time step {step} at time {t} s with max_cov = {cov: 0.3f}")
@@ -1017,8 +1024,9 @@ def target_moving(Nt, Nr, sz, scene, v, w, steps):
             target_est = test.targets[target_ind].estimated_location
             target_sig = test.sig_matrix[robot[target_ind]][action[target_ind]][
                          2 * target_ind: 2 * target_ind + 2, :
-                         ]
-            target_hist[target_ind, step, :] = target_loc
+                         ] # get the covariance matrix of the target
+            target_hist[target_ind, step, :] = target_loc # this target at this step is at this location (i think)
+            """
             plt.plot(
                 target_loc[0], target_loc[1], colors[target_ind] + "*", markersize=10
             )
@@ -1031,10 +1039,14 @@ def target_moving(Nt, Nr, sz, scene, v, w, steps):
                 target_hist[target_ind, 0: step + 1, 1],
                 colors[target_ind] + ":",
             )
+            """
             # get the covariance plot
             confidence_ellipse(target_sig, target_est, colors[target_ind])
-            robot_pair = test.robots_comb[robot[target_ind]]
+            
+            robot_pair = test.robots_comb[robot[target_ind]] # here I am getting the specific robot object that is tracking the target_ind 
+            # i have to turn it into an array since robot_pair has no len attribute
             robot_pair = [robot_pair]
+            
             error_round += find_error(target_loc, target_est)
 
             for robot_ind in range(len(robot_pair)):
@@ -1043,6 +1055,7 @@ def target_moving(Nt, Nr, sz, scene, v, w, steps):
                 robot_curr.pos_hist[step] = robot_pos
                 robot_hist[robot_curr.id, step, :] = robot_pos[0:2]
                 action_taken = test.action_for_each_robot[action[target_ind]]
+                """
                 plt.plot(
                     robot_curr.pos_hist[0: step + 1, 0],
                     robot_curr.pos_hist[0: step + 1, 1],
@@ -1065,7 +1078,7 @@ def target_moving(Nt, Nr, sz, scene, v, w, steps):
                     [robot_pos[1], target_est[1]],
                     colors[target_ind],
                 )
-
+                """
                 # update robot movement
                 robot_next = robot_curr.get_action(action_taken, dt)
                 robot_curr.update_pos(robot_next)
@@ -1083,7 +1096,7 @@ def target_moving(Nt, Nr, sz, scene, v, w, steps):
             test.targets[target_ind].update(target_next, target_sig)
         error_hist[step] = error_round
 
-    plt.show()
+    # plt.show()
 
     write_csv(robot_hist, "robot")
     write_csv(target_hist, "target")
