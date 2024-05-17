@@ -991,11 +991,11 @@ def target_moving(Nt, Nr, sz, scene, v, w, steps):
     target_radius = [
         np.sqrt(target.ground_truth[0] ** 2 + target.ground_truth[1] ** 2)
         for target in test.targets
-    ]
+    ] # calculates the distance of the target from the origin
     target_angle = [
         np.arctan2(target.ground_truth[1], target.ground_truth[0])
         for target in test.targets
-    ]
+    ] # calculates the heading angle of the target or theta
     times = np.linspace(0, steps * dt, steps)
     colors = ["r", "g", "b"]
     u = 1
@@ -1049,12 +1049,12 @@ def target_moving(Nt, Nr, sz, scene, v, w, steps):
             
             error_round += find_error(target_loc, target_est)
 
-            for robot_ind in range(len(robot_pair)):
-                robot_curr = robot_pair[robot_ind]
-                robot_pos = robot_curr.location
-                robot_curr.pos_hist[step] = robot_pos
-                robot_hist[robot_curr.id, step, :] = robot_pos[0:2]
-                action_taken = test.action_for_each_robot[action[target_ind]]
+            for robot_ind in range(len(robot_pair)): # this should always loop only once if scene 1
+                robot_curr = robot_pair[robot_ind] # extract the robot object from the list
+                robot_pos = robot_curr.location # get the location of the robot
+                robot_curr.pos_hist[step] = robot_pos # store the location of the robot at this step
+                robot_hist[robot_curr.id, step, :] = robot_pos[0:2] #storing x and y location of this robot id at this step
+                action_taken = test.action_for_each_robot[action[target_ind]] # get the action taken by the robot for this target
                 """
                 plt.plot(
                     robot_curr.pos_hist[0: step + 1, 0],
@@ -1080,8 +1080,8 @@ def target_moving(Nt, Nr, sz, scene, v, w, steps):
                 )
                 """
                 # update robot movement
-                robot_next = robot_curr.get_action(action_taken, dt)
-                robot_curr.update_pos(robot_next)
+                robot_next = robot_curr.get_action(action_taken, dt) # get the next location of the robot based on the action taken
+                robot_curr.update_pos(robot_next) # update the location of the robot with robot_next that contains new_x, new_y, new_th
 
             ###### two ways of finding the angular change ########
             # first is use a constant linear vel and find the change in angle
