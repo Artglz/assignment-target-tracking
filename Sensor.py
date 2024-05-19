@@ -142,7 +142,7 @@ class SensorAssignment:
         self.actions = np.array([[ii, jj] for ii in self.v for jj in self.w]) # get all the combinations of actions
         self.action_num = len(self.v) * len(self.w) # get the number of possible actions
         for i in range(self.Nr):
-            self.robots[i].set_steps(self.action_num, self.Nt) # make a cov_list for each robot
+            self.robots[i].set_steps(self.action_num, self.Nt) # ihitialize a cov_list for each robot with zeros
 
     def all_pairs(self, lst):# only used in scene 2
         """
@@ -219,11 +219,11 @@ class SensorAssignment:
                     quality_ts,
                     trace_ts,
                     sqerr_ts,
-                    tPos_hat_kp1,
-                    tSigma_hat_kp1,
+                    tPos_hat_kp1, # estimated target position at time k+1
+                    tSigma_hat_kp1, # estimated target covariance at time k+1
                     trace_t,
                     sqerr_t,
-                    trace_sig_diff,
+                    trace_sig_diff, # trace of the difference between the covariance matrix at time k+1 and time k
                 ) = self.EKF(
                     tPos_hat, tSigma_hat, tPos_true, 1, rPos, robot_curr
                 )  # r_set = 1
@@ -346,10 +346,10 @@ class SensorAssignment:
 
     def Greedy(self):
         if self.scene == 1:
-            # copy all the list of targets idk why, maybe to not deal with ownership issues
+            # copy all the list of target objects idk why, maybe to not deal with ownership issues
             targets_greedy = self.targets.copy()
             target_poped = []
-            # copy all the list of robots idk why, maybe to not deal with ownership issues
+            # copy all the list of robot objects idk why, maybe to not deal with ownership issues
             robots_greedy = self.robots.copy()
             # this is the matrix that will store the robot, action, and target, bascically the most important part
             robot_action_target = np.zeros((len(robots_greedy), 2), dtype=int) 
@@ -359,6 +359,7 @@ class SensorAssignment:
                     record_list = np.zeros(
                         (len(robots_greedy), self.action_num, len(targets_greedy))
                     ) # making a matrix of zeros with the size of the robots, actions, and targets to store the trace/covariance
+                    # i.e if i have 3 robots, 3 actions, and 3 targets, I will have 3 matrices of 9 rows and 3 columns (9x3)
 
                     # assemble all the trace for all the robot, action, for all targets
                     for ii in range(len(robots_greedy)):
@@ -385,8 +386,8 @@ class SensorAssignment:
                     robots_greedy.pop(max_loc[0][0])
                     # print(f'robot {robot_pop} with action {max_action} assigned to target {target_pop}')
 
-            actions = robot_action_target[:, 0] # get all the actions
-            pairs = robot_action_target[:, 1] # get all the targets
+            actions = robot_action_target[:, 0] # get all the actions, first column
+            pairs = robot_action_target[:, 1] # get all the targets, second column
             max_cov = sum(
                 [
                     self.robots[ii].get_cov()[robot_action_target[ii][0]][
@@ -489,7 +490,7 @@ class SensorAssignment:
             pairs = robot_action_target[:, 1]
             robot = robot_action_target[:, 2]
 
-        return (max_cov, robot, actions)
+        return (max_cov, robot, actions, pairs)
 
     def Hungarian(self):
         """
@@ -1006,14 +1007,16 @@ def target_moving(Nt, Nr, sz, scene, v, w, steps):
         test.robots[i].pos_hist = np.zeros((steps, 3))
 
     # setup the target trajectory
-    for step in range(1): # since the steps is 20, will run 20 times
+    for step in range(20): # since the steps is 20, will run 20 times
         t = times[step]
 
         # perform a step of tracking evaluation
-        test.step() # the main point of this function is to update the covariance matrix
+        test.step() # the main point of this function is to update the covariance matrix with the EKF function 
 
         # use the pair with the best quality
-        cov, robot, action = test.Greedy() # after the step function, we can use the greedy method to get the best pair since the covariance matrix is updated
+        cov, robot, action, pairs = test.Greedy() # after the step function, we can use the greedy method to get the best pair since the covariance matrix is updated
+        # pairs = {0: pairs[0], 1: pairs[1], 2: pairs[2]}
+        pair = {pairs[0] : 0, pairs[1]: 1, pairs[2]: 2}
 
         plt.figure(step)
         plt.title(f"time step {step} at time {t} s with max_cov = {cov: 0.3f}")
@@ -1026,24 +1029,29 @@ def target_moving(Nt, Nr, sz, scene, v, w, steps):
                          2 * target_ind: 2 * target_ind + 2, :
                          ] # get the covariance matrix of the target
             target_hist[target_ind, step, :] = target_loc # this target at this step is at this location (i think)
-            """
+            
             plt.plot(
                 target_loc[0], target_loc[1], colors[target_ind] + "*", markersize=10
-            )
+            ) # this is the true location of the target represented by colored stars
             plt.xlim([-3, 13])
             plt.ylim([-3, 13])
             plt.axis("equal")
-            plt.plot(target_est[0], target_est[1], colors[target_ind] + "s", mfc="w")
+            plt.plot(target_est[0], target_est[1], colors[target_ind] + "s", mfc="w") # this is the estimated location of the target represented by white squares
             plt.plot(
                 target_hist[target_ind, 0: step + 1, 0],
                 target_hist[target_ind, 0: step + 1, 1],
                 colors[target_ind] + ":",
-            )
-            """
-            # get the covariance plot
-            confidence_ellipse(target_sig, target_est, colors[target_ind])
+            ) # this is the trajectory of the target represented by colored lines
             
-            robot_pair = test.robots_comb[robot[target_ind]] # here I am getting the specific robot object that is tracking the target_ind 
+            # get the covariance plot
+            # confidence_ellipse(target_sig, target_est, colors[target_ind])
+            
+            # does this actually work? not sure if indexing the robot list returned form greedy method with the target_ind 
+            # will give me the correct robot match for that target_ind
+            #robot_pair = test.robots_comb[robot[target_ind]] # here I am getting the specific robot object that is tracking the target_ind 
+            robot_pair = test.robots_comb[pair.get(target_ind)]
+            # print(f"Target {target_ind} is assigned to robot: " , pair.get(target_ind))
+
             # i have to turn it into an array since robot_pair has no len attribute
             robot_pair = [robot_pair]
             
@@ -1055,39 +1063,43 @@ def target_moving(Nt, Nr, sz, scene, v, w, steps):
                 robot_curr.pos_hist[step] = robot_pos # store the location of the robot at this step
                 robot_hist[robot_curr.id, step, :] = robot_pos[0:2] #storing x and y location of this robot id at this step
                 action_taken = test.action_for_each_robot[action[target_ind]] # get the action taken by the robot for this target
-                """
+                
                 plt.plot(
                     robot_curr.pos_hist[0: step + 1, 0],
                     robot_curr.pos_hist[0: step + 1, 1],
-                    "D",
+                    "D", # this is the trajectory of the robot represented by empty squares
                     mec="k",
                     mfc="w",
                 )
                 plt.plot(
                     robot_curr.pos_hist[0: step + 1, 0],
                     robot_curr.pos_hist[0: step + 1, 1],
-                    "k:",
+                    # "k:",# this is the trajectory of the robot represented by black lines
                 )
                 plt.plot(
                     robot_pos[0],
                     robot_pos[1],
-                    "kD",
+                    "kD", # this is the current location of the robot represented by black diamonds
                 )
                 plt.plot(
                     [robot_pos[0], target_est[0]],
                     [robot_pos[1], target_est[1]],
                     colors[target_ind],
                 )
-                """
+                
                 # update robot movement
                 robot_next = robot_curr.get_action(action_taken, dt) # get the next location of the robot based on the action taken
                 robot_curr.update_pos(robot_next) # update the location of the robot with robot_next that contains new_x, new_y, new_th
 
             ###### two ways of finding the angular change ########
             # first is use a constant linear vel and find the change in angle
-            target_angle[target_ind] += u_tar / target_radius[target_ind] * dt
+            target_angle[target_ind] += u_tar / target_radius[target_ind] * dt 
+            # This is equivalent to moving the target ^^^^
+            # along the circumference of a circle centered at the origin.
 
             # another way is to use a constant angular change, but the linear velocity is not promised
+
+
             # target_angle[target_ind] += d_theta
             target_next = [
                 np.cos(target_angle[target_ind]) * target_radius[target_ind],
@@ -1096,7 +1108,7 @@ def target_moving(Nt, Nr, sz, scene, v, w, steps):
             test.targets[target_ind].update(target_next, target_sig)
         error_hist[step] = error_round
 
-    # plt.show()
+    plt.show()
 
     write_csv(robot_hist, "robot")
     write_csv(target_hist, "target")
